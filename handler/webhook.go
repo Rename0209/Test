@@ -2,6 +2,8 @@ package handler
 
 import (
 	"context"
+	"fmt"
+	"log"
 	"net/http"
 	"test/database"
 	"time"
@@ -26,36 +28,31 @@ type WebhookPayload struct {
 
 // Hàm xử lý webhook
 func WebhookHandler(c *gin.Context) {
-	var payload WebhookPayload
+	var payload []WebhookPayload
 
-	// Parse JSON từ request
+	// Parse dữ liệu JSON
 	if err := c.ShouldBindJSON(&payload); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON format"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
 		return
 	}
 
-	// Lưu vào MongoDB
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	// Lưu toàn bộ dữ liệu vào MongoDB
+	insertedCount := 0
+	for _, data := range payload {
+		_, err := database.DB.InsertOne(context.TODO(), data)
+		if err != nil {
+			log.Println("❌ Lỗi khi lưu dữ liệu:", err)
+			continue
+		}
+		insertedCount++
+	}
 
-	_, err := database.DB.InsertOne(ctx, bson.M{
-		"notification_messages_token":    payload.NotificationToken,
-		"recipient_id":                   payload.RecipientID,
-		"notification_messages_reoptin":  payload.Reoptin,
-		"topic_title":                    payload.TopicTitle,
-		"creation_timestamp":             payload.CreationTime,
-		"token_expiry_timestamp":         payload.TokenExpiry,
-		"user_token_status":              payload.TokenStatus,
-		"next_eligible_time":             payload.NextEligibleTime,
-		"notification_messages_timezone": payload.TimeZone,
+	// Trả về kết quả
+	c.JSON(http.StatusOK, gin.H{
+		"status":         "success",
+		"inserted_count": insertedCount,
+		"message":        fmt.Sprintf("Đã nhận và lưu %d dữ liệu", insertedCount),
 	})
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save to database"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "Received and stored successfully"})
 }
 
 // Lấy danh sách dữ liệu từ MongoDB
