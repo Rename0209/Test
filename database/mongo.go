@@ -13,7 +13,7 @@ var DB *mongo.Collection
 
 func ConnectMongoDB() {
 	// Cấu hình URI MongoDB
-	uri := "mongodb+srv://testing:020902%40Bin@cluster0.j1me7.mongodb.net/"
+	uri := "mongodb+srv://testing:020902%40Bin@cluster0.j1me7.mongodb.net/webhookDB"
 	clientOptions := options.Client().ApplyURI(uri)
 
 	// Kết nối MongoDB
