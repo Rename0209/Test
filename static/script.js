@@ -2,7 +2,6 @@ function fetchData() {
     fetch('/data')
         .then(response => response.json())
         .then(data => {
-            console.log("Dữ liệu API trả về:", data); // In dữ liệu để kiểm tra
             let tableBody = document.getElementById("dataTable");
             tableBody.innerHTML = "";
 
