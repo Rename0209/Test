@@ -1,1 +1,21 @@
-*.env
+# Bỏ qua các file binary build
+/bin/
+*.exe
+*.out
+*.o
+
+# Bỏ qua module cache
+/pkg/
+/vendor/
+go.sum
+go.mod~
+
+# Bỏ qua thư mục biên dịch của Go
+*.a
+
+# Bỏ qua thông tin môi trường (không commit mật khẩu DB)
+.env
+
+# Bỏ qua file log, temp
+*.log
+*.tmp
