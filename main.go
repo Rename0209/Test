@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"test/database"
 	"test/handler"
 
@@ -27,7 +28,10 @@ func main() {
 		c.Status(204) // Trả về No Content (Không có lỗi)
 	})
 
-	port := 8080
-	fmt.Printf("Server đang chạy tại http://localhost:%d\n", port)
-	r.Run(fmt.Sprintf(":%d", port))
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080" // Mặc định dùng 8080 nếu không có biến môi trường
+	}
+	fmt.Printf("Server đang chạy tại http://localhost:%s\n", port)
+	r.Run(fmt.Sprintf(":%s", port))
 }
