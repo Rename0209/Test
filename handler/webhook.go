@@ -38,33 +38,46 @@ func WebhookHandler(c *gin.Context) {
 		return
 	}
 
-	// Thử parse như một mảng JSON []
-	if err := json.Unmarshal(body, &payload); err != nil {
-		// Nếu thất bại, thử parse như một object {}
+	// Kiểm tra dữ liệu JSON
+	if json.Unmarshal(body, &payload) != nil {
+		// Nếu không phải mảng, thử parse object đơn lẻ
 		var singlePayload WebhookPayload
-		if err := json.Unmarshal(body, &singlePayload); err != nil {
+		if json.Unmarshal(body, &singlePayload) != nil {
+			log.Println("❌ Dữ liệu không hợp lệ:", string(body))
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
 			return
 		}
 		payload = append(payload, singlePayload)
 	}
 
-	// Lưu toàn bộ dữ liệu vào MongoDB
-	insertedCount := 0
+	// Nếu payload rỗng
+	if len(payload) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Payload không có dữ liệu"})
+		return
+	}
+
+	// Chuyển đổi dữ liệu sang []interface{} để InsertMany
+	var insertData []interface{}
 	for _, data := range payload {
-		_, err := database.DB.InsertOne(context.TODO(), data)
-		if err != nil {
-			log.Println("❌ Lỗi khi lưu dữ liệu:", err)
-			continue
-		}
-		insertedCount++
+		insertData = append(insertData, data)
+	}
+
+	// Lưu toàn bộ dữ liệu vào MongoDB với InsertMany
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	res, err := database.DB.InsertMany(ctx, insertData)
+	if err != nil {
+		log.Println("❌ Lỗi khi lưu dữ liệu:", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khi lưu dữ liệu"})
+		return
 	}
 
 	// Trả về kết quả
 	c.JSON(http.StatusOK, gin.H{
 		"status":         "success",
-		"inserted_count": insertedCount,
-		"message":        fmt.Sprintf("Đã nhận và lưu %d dữ liệu", insertedCount),
+		"inserted_count": len(res.InsertedIDs),
+		"message":        fmt.Sprintf("Đã nhận và lưu %d dữ liệu", len(res.InsertedIDs)),
 	})
 }
 
@@ -94,62 +107,52 @@ func GetDataHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, results)
 }
 
-// Tìm kiếm theo title
+// Hàm tìm kiếm dữ liệu theo title
 func FindByTitle(c *gin.Context) {
-	topic_title := c.Query("topic_title")
-	if topic_title == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "topic_title is required"})
+	topicTitle := c.Query("topic_title")
+	if topicTitle == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "topic_title là bắt buộc"})
 		return
 	}
 
-	var results []WebhookPayload
-	filter := bson.M{"topic_title": topic_title}
-
-	cursor, err := database.DB.Find(context.TODO(), filter)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	defer cursor.Close(context.TODO())
-
-	if err := cursor.All(context.TODO(), &results); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	if len(results) == 0 {
-		c.JSON(http.StatusOK, gin.H{"message": "No data found"})
-		return
-	}
-
-	c.JSON(http.StatusOK, results)
+	findDataByField(c, "topic_title", topicTitle)
 }
 
-// Tìm kiếm theo Recipient_ID
+// Hàm tìm kiếm dữ liệu theo Recipient_ID
 func FindByRecipientID(c *gin.Context) {
 	recipientID := c.Query("recipient_id")
 	if recipientID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "recipient_id is required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "recipient_id là bắt buộc"})
 		return
 	}
 
-	var results []WebhookPayload
-	filter := bson.M{"recipient_id": recipientID}
+	findDataByField(c, "recipient_id", recipientID)
+}
 
-	cursor, err := database.DB.Find(context.TODO(), filter)
+// Hàm chung tìm kiếm theo một trường cụ thể
+func findDataByField(c *gin.Context, fieldName, fieldValue string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	filter := bson.M{fieldName: fieldValue}
+	//projection := options.Find().SetProjection(bson.M{"recipient_id": 1})
+
+	cursor, err := database.DB.Find(ctx, filter /*, projection*/)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Println("❌ Lỗi khi tìm dữ liệu:", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn dữ liệu"})
 		return
 	}
-	defer cursor.Close(context.TODO())
+	defer cursor.Close(ctx)
 
-	if err := cursor.All(context.TODO(), &results); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	var results []bson.M
+	if err := cursor.All(ctx, &results); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khi parse dữ liệu"})
 		return
 	}
 
 	if len(results) == 0 {
-		c.JSON(http.StatusOK, gin.H{"message": "No data found"})
+		c.JSON(http.StatusOK, gin.H{"message": "Không tìm thấy dữ liệu"})
 		return
 	}
 
