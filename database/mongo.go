@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 
+	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -12,8 +14,15 @@ import (
 var DB *mongo.Collection
 
 func ConnectMongoDB() {
+
+	// Load file .env
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("❌ Lỗi khi tải file .env")
+	}
+
 	// Cấu hình URI MongoDB
-	uri := "mongodb+srv://testing:020902%40Bin@cluster0.j1me7.mongodb.net/webhookDB"
+	uri := os.Getenv("MONGODB_URI")
 	clientOptions := options.Client().ApplyURI(uri)
 
 	// Kết nối MongoDB
