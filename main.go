@@ -15,6 +15,9 @@ func main() {
 	r.LoadHTMLGlob("static/*.html")
 	r.Static("/static", "./static")
 
+	r.GET("/find/title", handler.FindByTitle)
+	r.GET("/find/recipient", handler.FindByRecipientID)
+
 	r.POST("/webhook", handler.WebhookHandler)
 	r.GET("/data", handler.GetDataHandler)
 	r.GET("/", func(c *gin.Context) {

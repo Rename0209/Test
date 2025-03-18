@@ -2,7 +2,9 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"test/database"
@@ -29,10 +31,22 @@ type WebhookPayload struct {
 func WebhookHandler(c *gin.Context) {
 	var payload []WebhookPayload
 
-	// Parse dữ liệu JSON
-	if err := c.ShouldBindJSON(&payload); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
+	// Đọc dữ liệu raw từ request body
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể đọc dữ liệu"})
 		return
+	}
+
+	// Thử parse như một mảng JSON []
+	if err := json.Unmarshal(body, &payload); err != nil {
+		// Nếu thất bại, thử parse như một object {}
+		var singlePayload WebhookPayload
+		if err := json.Unmarshal(body, &singlePayload); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
+			return
+		}
+		payload = append(payload, singlePayload)
 	}
 
 	// Lưu toàn bộ dữ liệu vào MongoDB
@@ -72,6 +86,68 @@ func GetDataHandler(c *gin.Context) {
 	}
 
 	// Nếu dữ liệu có vấn đề, kiểm tra projection hoặc database schema
+	if len(results) == 0 {
+		c.JSON(http.StatusOK, gin.H{"message": "No data found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, results)
+}
+
+// Tìm kiếm theo title
+func FindByTitle(c *gin.Context) {
+	topic_title := c.Query("topic_title")
+	if topic_title == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "topic_title is required"})
+		return
+	}
+
+	var results []WebhookPayload
+	filter := bson.M{"topic_title": topic_title}
+
+	cursor, err := database.DB.Find(context.TODO(), filter)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	defer cursor.Close(context.TODO())
+
+	if err := cursor.All(context.TODO(), &results); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	if len(results) == 0 {
+		c.JSON(http.StatusOK, gin.H{"message": "No data found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, results)
+}
+
+// Tìm kiếm theo Recipient_ID
+func FindByRecipientID(c *gin.Context) {
+	recipientID := c.Query("recipient_id")
+	if recipientID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "recipient_id is required"})
+		return
+	}
+
+	var results []WebhookPayload
+	filter := bson.M{"recipient_id": recipientID}
+
+	cursor, err := database.DB.Find(context.TODO(), filter)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	defer cursor.Close(context.TODO())
+
+	if err := cursor.All(context.TODO(), &results); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	if len(results) == 0 {
 		c.JSON(http.StatusOK, gin.H{"message": "No data found"})
 		return
