@@ -16,10 +16,7 @@ var DB *mongo.Collection
 func ConnectMongoDB() {
 
 	// Load file .env
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("❌ Lỗi khi tải file .env")
-	}
+	_ = godotenv.Load(".env")
 
 	// Cấu hình URI MongoDB
 	uri := os.Getenv("MONGODB_URI")
